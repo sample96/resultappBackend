@@ -29,7 +29,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/event-results')
+mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://sample89019:VeBZ3Ob5xUD4bQJp@cluster0.lhc8y9p.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
   .then(() => {
     console.log('Connected to MongoDB');
     app.listen(PORT, () => {
