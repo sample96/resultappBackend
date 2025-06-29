@@ -1,76 +1,47 @@
-// api/index.js (Move this to api folder, not root)
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import categoryRoutes from '../routes/categories.js';
-import resultRoutes from '../routes/results.js';
+import categoryRoutes from './routes/categories.js';
+import resultRoutes from './routes/results.js';
 
 dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-// Middleware with proper CORS configuration
-app.use(cors({
-  origin: [
-    'https://resultapp.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:5173'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
-
+// Middleware
 app.use(express.json());
+app.use(cors({
+  origin: '*', // Allow requests from any origin
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.use(express.urlencoded({ extended: true }));
 
-// MongoDB connection - optimized for serverless
-let cachedDb = null;
-
+// MongoDB connection with proper configuration
 const connectDB = async () => {
-  if (cachedDb) {
-    return cachedDb;
-  }
-
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-      bufferCommands: false,
-      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000, // Shorter for serverless
+      maxPoolSize: 1, // Serverless functions work better with fewer connections
     });
     
-    cachedDb = conn;
     console.log(`MongoDB Connected: ${conn.connection.host}`);
-    return conn;
   } catch (error) {
     console.error('MongoDB connection error:', error);
-    throw error;
+    process.exit(1);
   }
 };
-
-// Initialize database connection
-app.use(async (req, res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (error) {
-    console.error('Database connection failed:', error);
-    res.status(500).json({ 
-      error: 'Database connection failed',
-      message: error.message 
-    });
-  }
-});
 
 // Routes
 app.use('/api/categories', categoryRoutes);
 app.use('/api/results', resultRoutes);
 
-// Health check endpoint
+// Health check endpoint with database connectivity test
 app.get('/api/health', async (req, res) => {
   try {
+    // Test database connection
     const dbState = mongoose.connection.readyState;
     const dbStatus = {
       0: 'disconnected',
@@ -88,24 +59,42 @@ app.get('/api/health', async (req, res) => {
   } catch (error) {
     res.status(500).json({ 
       status: 'ERROR', 
-      message: 'Health check failed',
+      message: 'Database connection failed',
       error: error.message 
     });
   }
 });
 
-// Catch-all for API routes
-app.get('/api/*', (req, res) => {
-  res.status(404).json({ error: 'API endpoint not found' });
-});
-
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  console.error(err.stack);
   res.status(500).json({ 
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    error: 'Something went wrong!',
+    message: err.message 
   });
 });
+
+// Start server
+const startServer = async () => {
+  await connectDB();
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+};
+
+// Handle graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('Shutting down gracefully...');
+  await mongoose.connection.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Shutting down gracefully...');
+  await mongoose.connection.close();
+  process.exit(0);
+});
+
+startServer().catch(console.error);
 
 export default app;
