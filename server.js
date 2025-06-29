@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: '*', // Allow requests from any origin
+  origin: 'https://resultapp-backend-blxr.vercel.app' , // Allow requests from any origin
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
