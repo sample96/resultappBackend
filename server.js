@@ -12,43 +12,26 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: ['http://localhost:5173', 'https://resultapp.vercel.app'], // Add your frontend domains
+  origin: ['http://localhost:5173', 'https://resultapp.vercel.app'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
-app.use(express.urlencoded({ extended: true }));
 
-// Handle preflight requests
-app.options('*', cors());
-
-let cachedConnection = null;
-
+// Simple MongoDB connection
 const connectDB = async () => {
-  if (cachedConnection) {
-    return cachedConnection;
+  if (mongoose.connection.readyState >= 1) {
+    return;
   }
 
   try {
-    const connection = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-      socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-      bufferCommands: false, // Disable mongoose buffering
-      bufferMaxEntries: 0, // Disable mongoose buffering
-      maxPoolSize: 1, // Maintain up to 1 socket connection
-    });
-    
-    cachedConnection = connection;
+    await mongoose.connect(process.env.MONGODB_URI);
     console.log('Connected to MongoDB');
-    return connection;
   } catch (error) {
     console.error('MongoDB connection error:', error);
     throw error;
   }
 };
-
 
 // Routes
 app.use('/api/categories', categoryRoutes);
@@ -60,7 +43,7 @@ app.get('/api/health', async (req, res) => {
     await connectDB();
     res.json({ 
       status: 'OK', 
-      message: 'Server is running on Vercel',
+      message: 'Server is running',
       mongodb: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
     });
   } catch (error) {
@@ -79,20 +62,34 @@ app.get('/', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error stack:', err.stack);
+  console.error('Error:', err.message);
   res.status(500).json({ 
     error: 'Something went wrong!',
     message: err.message 
   });
 });
 
-// Main handler for Vercel serverless function
+// For local development
+const PORT = process.env.PORT || 3000;
+
+if (process.env.NODE_ENV !== 'production') {
+  // Connect to DB and start server for local development
+  connectDB()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+      });
+    })
+    .catch((error) => {
+      console.error('Failed to start server:', error);
+      process.exit(1);
+    });
+}
+
+// Main handler for Vercel
 export default async (req, res) => {
   try {
-    // Ensure database connection before handling requests
     await connectDB();
-    
-    // Handle the request with Express
     return app(req, res);
   } catch (error) {
     console.error('Handler error:', error);
