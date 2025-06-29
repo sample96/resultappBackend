@@ -8,16 +8,40 @@ import resultRoutes from './routes/results.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: '*', // Allow requests from any origin'
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: ['http://localhost:5173', 'https://your-frontend-domain.vercel.app'], // Add your frontend domains
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 app.use(express.urlencoded({ extended: true }));
+
+// Handle preflight requests
+app.options('*', cors());
+
+// Connect to MongoDB (only if not already connected)
+let isConnected = false;
+
+const connectDB = async () => {
+  if (isConnected) {
+    return;
+  }
+  
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    isConnected = true;
+    console.log('Connected to MongoDB');
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    throw error;
+  }
+};
 
 // Routes
 app.use('/api/categories', categoryRoutes);
@@ -25,21 +49,13 @@ app.use('/api/results', resultRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Server is running' });
+  res.json({ status: 'OK', message: 'Server is running on Vercel' });
 });
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI )
-  .then(() => {
-    console.log('Connected to MongoDB');
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  })
-  .catch((error) => {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
-  });
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ message: 'Backend API is running' });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -47,4 +63,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
-export default app;
+// Vercel serverless function handler
+export default async (req, res) => {
+  await connectDB();
+  return app(req, res);
+};
