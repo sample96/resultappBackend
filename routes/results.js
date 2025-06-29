@@ -8,14 +8,26 @@ const router = express.Router();
 // Get all results
 router.get('/', async (req, res) => {
   try {
-    const results = await Result.find()
+        if (mongoose.connection.readyState !== 1) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    // Replace 'Result' with your actual model
+    const results = await Result.find().maxTimeMS(10000)
       .populate('category')
       .sort({ createdAt: -1 });
     res.json(results);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+       console.error('Error fetching results:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch results',
+      message: error.message 
+    });
   }
 });
+
+
+
 
 // Create new result
 router.post('/', async (req, res) => {

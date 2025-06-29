@@ -18,15 +18,31 @@ app.use(cors({
   credentials: true
 }));
 
-// Simple MongoDB connection
+// MongoDB connection with proper serverless handling
 const connectDB = async () => {
-  if (mongoose.connection.readyState >= 1) {
-    return;
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  if (mongoose.connection.readyState === 2) {
+    // Connection is connecting, wait for it
+    return new Promise((resolve, reject) => {
+      mongoose.connection.on('connected', () => resolve(mongoose.connection));
+      mongoose.connection.on('error', reject);
+    });
   }
 
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    // Disable buffering for serverless
+    mongoose.set('bufferCommands', false);
+    
+    const connection = await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+    
     console.log('Connected to MongoDB');
+    return connection;
   } catch (error) {
     console.error('MongoDB connection error:', error);
     throw error;
