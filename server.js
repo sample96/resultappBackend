@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import categoryRoutes from './routes/categories.js';
 import resultRoutes from './routes/results.js';
+import { setupSwagger } from './docs/swagger.js';
 
 dotenv.config();
 
@@ -12,16 +13,14 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: [
-    'http://localhost:5173', 
-    'http://localhost:3000',
-    'https://resultapp.vercel.app',
-    'https://resultapp-backend-blxr.vercel.app'
-  ],
+  origin: "*",
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
+
+// Swagger documentation
+setupSwagger(app);
 
 // MongoDB connection with proper serverless handling
 const connectDB = async () => {
@@ -53,16 +52,6 @@ const connectDB = async () => {
     throw error;
   }
 };
-
-// Test endpoint to debug
-app.get('/api/test', (req, res) => {
-  res.json({ 
-    message: 'API is working',
-    timestamp: new Date().toISOString(),
-    method: req.method,
-    url: req.url
-  });
-});
 
 // Routes
 app.use('/api/categories', categoryRoutes);
@@ -119,29 +108,14 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Main handler for Vercel
 export default async (req, res) => {
-  // Add CORS headers manually for Vercel
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
   try {
-    console.log(`${req.method} ${req.url} - Connecting to DB...`);
     await connectDB();
-    console.log('DB connected, handling request...');
-    
     return app(req, res);
   } catch (error) {
     console.error('Handler error:', error);
     return res.status(500).json({ 
       error: 'Database connection failed',
-      message: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: error.message 
     });
   }
 };

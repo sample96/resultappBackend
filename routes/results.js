@@ -1,129 +1,32 @@
 import express from 'express';
-import PDFDocument from 'pdfkit';
-import Result from '../models/Result.js';
-import Category from '../models/Category.js';
+import { getAllResults, createResult, getResultById, updateResult, deleteResult } from '../controllers/resultController.js';
+import { resultSchema } from '../validation/resultValidation.js';
+import Joi from 'joi';
 
 const router = express.Router();
 
-// Get all results
-router.get('/', async (req, res) => {
-  try {
-        if (mongoose.connection.readyState !== 1) {
-      return res.status(500).json({ error: 'Database not connected' });
-    }
-
-    // Replace 'Result' with your actual model
-    const results = await Result.find().maxTimeMS(10000)
-      .populate('category')
-      .sort({ createdAt: -1 });
-    res.json(results);
-  } catch (error) {
-       console.error('Error fetching results:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch results',
-      message: error.message 
-    });
+// Validation middleware
+const validateResult = (req, res, next) => {
+  const { error } = resultSchema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
   }
-});
+  next();
+};
 
-
-
+// Get all results
+router.get('/', getAllResults);
 
 // Create new result
-router.post('/', async (req, res) => {
-  try {
-    const result = new Result(req.body);
-    await result.save();
-    await result.populate('category');
-    res.status(201).json(result);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});
+router.post('/', validateResult, createResult);
 
 // Get result by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const result = await Result.findById(req.params.id).populate('category');
-    if (!result) {
-      return res.status(404).json({ error: 'Result not found' });
-    }
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.get('/:id', getResultById);
 
 // Update result
-router.put('/:id', async (req, res) => {
-  try {
-    const result = await Result.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    ).populate('category');
-    
-    if (!result) {
-      return res.status(404).json({ error: 'Result not found' });
-    }
-    
-    res.json(result);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});
+router.put('/:id', validateResult, updateResult);
 
 // Delete result
-router.delete('/:id', async (req, res) => {
-  try {
-    const result = await Result.findByIdAndDelete(req.params.id);
-    if (!result) {
-      return res.status(404).json({ error: 'Result not found' });
-    }
-    res.json({ message: 'Result deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Generate PDF for result
-// project/server/routes/results.js
-router.get('/:id/pdf', async (req, res) => {
-  try {
-    const result = await Result.findById(req.params.id).populate('category');
-    if (!result) {
-      return res.status(404).json({ error: 'Result not found' });
-    }
-
-    const doc = new PDFDocument({ margin: 50 });
-
-    // Set response headers
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="result-${result._id}.pdf"`);
-
-    // Pipe the PDF to response
-    const pdfStream = doc.pipe(res);
-
-      doc.fontSize(24).text(`Result: ${result.eventName}`, 100, 100);
-    doc.fontSize(18).text(`Category: ${result.category.name}`, 100, 150);
-    doc.fontSize(18).text(`Date: ${result.eventDate}`, 100, 200);
-
-    // End the PDF document
-    doc.end();
-
-    // Wait for the PDF stream to finish
-    pdfStream.on('finish', () => {
-      console.log('PDF generated and sent to client');
-    });
-
-    pdfStream.on('error', (err) => {
-      console.error('Error generating PDF:', err);
-      res.status(500).json({ error: 'Error generating PDF' });
-    });
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    res.status(500).json({ error: 'Error generating PDF' });
-  }
-});
+router.delete('/:id', deleteResult);
 
 export default router;
